@@ -54,6 +54,8 @@ app.use(express.json({ limit: '1mb' }));
 
 var store = storage.createStore({
   backend: process.env.STORAGE_BACKEND,
+  region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION,
+  messagesTable: process.env.MESSAGES_TABLE,
 });
 
 app.get('/api/list-competitions', function(req, res) {
@@ -97,10 +99,17 @@ app.post('/api/send-message', function(req, res) {
     res.status(400).json({ ok: false, error: 'Invalid message payload' });
     return;
   }
+  if (!message.channel || typeof message.channel !== 'string') {
+    res.status(400).json({ ok: false, error: 'Message channel is required' });
+    return;
+  }
   if (!message.id) {
     message.id = 'msg_' + Date.now();
   }
-  message.createdAt = new Date().toISOString();
+  if (typeof message.timestamp !== 'number') {
+    message.timestamp = Date.now();
+  }
+  message.createdAt = new Date(message.timestamp).toISOString();
   Promise.resolve()
     .then(function() {
       return store.sendMessage(message);
@@ -114,9 +123,19 @@ app.post('/api/send-message', function(req, res) {
 });
 
 app.get('/api/list-messages', function(req, res) {
+  var limit = Number(req.query.limit);
+  if (!Number.isFinite(limit) || limit <= 0) {
+    limit = null;
+  }
+  var descending = String(req.query.desc || '').toLowerCase() === 'true';
+  var channel = req.query.channel;
   Promise.resolve()
     .then(function() {
-      return store.listMessages();
+      return store.listMessages({
+        channel: channel,
+        limit: limit || undefined,
+        descending: descending,
+      });
     })
     .then(function(messages) {
       res.json({ ok: true, messages: messages });
