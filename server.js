@@ -52,6 +52,31 @@ var corsHandler = cors_proxy.createRequestHandler({
 var app = express();
 app.use(express.json({ limit: '1mb' }));
 
+// CORS for API endpoints (allow subdomains of marcink.net).
+app.use(function corsForApi(req, res, next) {
+  var origin = req.headers.origin;
+  if (origin) {
+    try {
+      var hostname = new URL(origin).hostname;
+      if (hostname === 'marcink.net' || hostname.endsWith('.marcink.net')) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+        res.setHeader('Vary', 'Origin');
+      }
+    } catch (err) {
+      // Ignore invalid Origin header.
+    }
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.status(204).end();
+    return;
+  }
+
+  next();
+});
+
 var store = storage.createStore({
   backend: process.env.STORAGE_BACKEND,
   region: process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION,
